@@ -150,6 +150,45 @@
   }
   .api-btn.primary:hover { filter: brightness(1.08); }
 
+  /* ---------- Beállítások modal ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(5, 8, 16, 0.72);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal {
+    width: 100%; max-width: 540px;
+    background: var(--bg-1); border: 1px solid var(--line);
+    border-radius: 16px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    animation: modalIn .18s ease-out;
+  }
+  @keyframes modalIn { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 15px 20px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(135deg, rgba(29,66,138,0.55), rgba(200,16,46,0.42));
+  }
+  .modal-head h2 { font-size: 18px; font-weight: 900; }
+  .modal-close {
+    background: rgba(0,0,0,0.25); border: 1px solid var(--line); color: var(--text);
+    width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 14px;
+    line-height: 1;
+  }
+  .modal-close:hover { border-color: var(--nba-red); color: #fff; }
+  .modal-body { padding: 20px; }
+  .settings-section h3 { font-size: 14px; margin-bottom: 6px; }
+  .settings-help { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .settings-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .settings-field > span { font-size: 13px; font-weight: 700; color: var(--text); }
+  .settings-field > span small { color: var(--muted); font-weight: 500; }
+  .settings-field .api-input { width: 100%; flex: none; }
+  .settings-link { font-size: 12px; color: var(--gold); text-decoration: none; align-self: flex-start; }
+  .settings-link:hover { text-decoration: underline; }
+  .settings-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
   .refresh-bar {
     max-width: 1040px;
     margin: 12px auto 0;
@@ -343,14 +382,46 @@
     <button class="pill" data-sort="date-asc">⏳ Legrégebbi elöl</button>
     <button class="pill" data-sort="views-desc">🔥 Legnézettebb elöl</button>
     <button class="pill active" id="autoToggle" title="Az oldal percenként automatikusan frissíti a videólistát">🔄 Auto-frissítés: BE</button>
+    <div class="spacer"></div>
+    <button class="pill" id="settingsBtn" title="API beállítások">⚙️ Beállítások</button>
   </div>
 
-  <div class="api-bar">
-    <span class="api-label">⚙️ API mód:</span>
-    <input id="tsdbKey" class="api-input" type="password" placeholder="NBA (TheSportsDB) kulcs" title="Ingyenes kulcs a thesportsdb.com-ról. Üresen a korlátozott teszt kulcsot (3) használja." autocomplete="off" />
-    <input id="apiKey" class="api-input" type="password" placeholder="YouTube Data API kulcs" title="Ingyenes YouTube Data API v3 kulcs — ezzel keresi meg a videókat." autocomplete="off" />
-    <button id="loadNba" class="api-btn primary" title="Az utolsó 5 NBA meccs az NBA API-ból, a videók a YouTube API-val">🏀 Utolsó 5 meccs (NBA API)</button>
-    <button id="loadLive" class="api-btn" title="A YouTube legnézettebb NBA összefoglalói">🔥 Legnézettebb</button>
+  <!-- Beállítások modal -->
+  <div class="modal-overlay" id="settingsModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-head">
+        <h2 id="settingsTitle">⚙️ Beállítások</h2>
+        <button class="modal-close" id="settingsClose" aria-label="Bezárás">✕</button>
+      </div>
+      <div class="modal-body">
+        <section class="settings-section">
+          <h3>🏀 API mód</h3>
+          <p class="settings-help">
+            Az utolsó 5 NBA meccs lekérése egy ingyenes NBA API-ból, a videók keresése a YouTube
+            Data API-val. A kulcsok csak a saját böngésződben (localStorage) tárolódnak.
+            Kulcsok nélkül a kurált lista látható.
+          </p>
+
+          <label class="settings-field">
+            <span>NBA API kulcs <small>(TheSportsDB)</small></span>
+            <input id="tsdbKey" class="api-input" type="password" placeholder="üresen a teszt kulcs (3) – csak 1 meccs" autocomplete="off" />
+            <a class="settings-link" href="https://www.thesportsdb.com/free_sports_api" target="_blank" rel="noopener">Ingyenes kulcs igénylése ↗</a>
+          </label>
+
+          <label class="settings-field">
+            <span>YouTube Data API kulcs <small>(a videók kereséséhez)</small></span>
+            <input id="apiKey" class="api-input" type="password" placeholder="kötelező a videókereséshez" autocomplete="off" />
+            <a class="settings-link" href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener">Kulcs létrehozása ↗</a>
+          </label>
+
+          <div class="settings-actions">
+            <button id="loadNba" class="api-btn primary" title="Az utolsó 5 NBA meccs az NBA API-ból, a videók a YouTube API-val">🏀 Utolsó 5 meccs betöltése</button>
+            <button id="loadLive" class="api-btn" title="A YouTube legnézettebb NBA összefoglalói">🔥 Legnézettebb</button>
+            <button id="resetCurated" class="api-btn" title="Vissza a beépített kurált listához">↩️ Kurált lista</button>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 
   <div class="refresh-bar">
@@ -627,12 +698,34 @@
     });
   });
 
+  /* ---------- Beállítások modal ---------- */
+  const settingsModal = document.getElementById("settingsModal");
+  function openSettings() { settingsModal.hidden = false; }
+  function closeSettings() { if (settingsModal) settingsModal.hidden = true; }
+  document.getElementById("settingsBtn").addEventListener("click", openSettings);
+  document.getElementById("settingsClose").addEventListener("click", closeSettings);
+  settingsModal.addEventListener("click", e => { if (e.target === settingsModal) closeSettings(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !settingsModal.hidden) closeSettings(); });
+
+  // Vissza a beépített kurált listához
+  document.getElementById("resetCurated").addEventListener("click", () => {
+    mode = "curated";
+    try { localStorage.removeItem(LS_MODE); } catch (e) {}
+    videos = [...CURATED];
+    currentSort = "date-desc";
+    document.querySelectorAll(".pill[data-sort]").forEach(b =>
+      b.classList.toggle("active", b.dataset.sort === "date-desc"));
+    render();
+    lastUpdated = new Date();
+    closeSettings();
+  });
+
   /* ----------------------------------------------------------
      Opcionális élő betöltés a YouTube Data API v3-ról.
      A legnézettebb "NBA full game highlights" videókat kéri le,
      majd dátum szerint rendezi.
   ---------------------------------------------------------- */
-  document.getElementById("loadLive").addEventListener("click", () => loadLive(false));
+  document.getElementById("loadLive").addEventListener("click", () => { closeSettings(); loadLive(false); });
   async function loadLive(silent = false) {
     const key = document.getElementById("apiKey").value.trim();
     const list = document.getElementById("list");
@@ -714,7 +807,7 @@
   tsdbInput.addEventListener("change", () => { try { localStorage.setItem(LS_TSDB, tsdbInput.value.trim()); } catch (e) {} });
   ytInput.addEventListener("change", () => { try { localStorage.setItem(LS_YT, ytInput.value.trim()); } catch (e) {} });
 
-  document.getElementById("loadNba").addEventListener("click", () => loadFromNbaApi(false));
+  document.getElementById("loadNba").addEventListener("click", () => { closeSettings(); loadFromNbaApi(false); });
 
   // Az utolsó N lejátszott NBA meccs a TheSportsDB-ről.
   async function fetchLastNbaGames(tsdbKey, n) {
