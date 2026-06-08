@@ -403,9 +403,9 @@
           </p>
 
           <label class="settings-field">
-            <span>NBA API kulcs <small>(TheSportsDB)</small></span>
-            <input id="tsdbKey" class="api-input" type="password" placeholder="üresen a teszt kulcs (3) – csak 1 meccs" autocomplete="off" />
-            <a class="settings-link" href="https://www.thesportsdb.com/free_sports_api" target="_blank" rel="noopener">Ingyenes kulcs igénylése ↗</a>
+            <span>NBA API kulcs <small>(balldontlie)</small></span>
+            <input id="nbaKey" class="api-input" type="password" placeholder="ingyenes kulcs az app.balldontlie.io-ról" autocomplete="off" />
+            <a class="settings-link" href="https://app.balldontlie.io/" target="_blank" rel="noopener">Ingyenes regisztráció + kulcs ↗</a>
           </label>
 
           <label class="settings-field">
@@ -435,7 +435,7 @@
 
   <footer>
     Az „Utolsó 5 meccs (NBA API)" mód az utolsó NBA meccseket a
-    <a href="https://www.thesportsdb.com/free_sports_api" target="_blank" rel="noopener">TheSportsDB</a>
+    <a href="https://www.balldontlie.io/" target="_blank" rel="noopener">balldontlie</a>
     ingyenes API-jából tölti, a videókat pedig a
     <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener">YouTube Data API</a>-val keresi meg.
     A kulcsok csak a böngésződben tárolódnak. Kulcsok nélkül a kurált lista látható.
@@ -775,15 +775,15 @@
 
   /* ----------------------------------------------------------
      TELJES API-MÓD
-     1) Az utolsó 5 lejátszott NBA meccs egy ingyenes NBA API-ból
-        (TheSportsDB, NBA league id 4387) — dátum + csapatok.
+     1) Az utolsó 5 lejátszott NBA meccs az ingyenes balldontlie
+        API-ból (api.balldontlie.io) — dátum + csapatok + eredmény.
      2) Meccsenként a YouTube Data API megkeresi a beágyazható
         összefoglaló videót (videoEmbeddable=true, a legnézettebbet).
      A talált videók localStorage-ban gyorsítótárazva → az auto-
      frissítés és az újratöltés csak az ÚJ meccsekre keres (kvóta-kímélő).
   ---------------------------------------------------------- */
-  const NBA_LEAGUE_ID = "4387";          // TheSportsDB: NBA
-  const LS_TSDB = "nbahub_tsdb_key";
+  const BDL_BASE = "https://api.balldontlie.io/v1";   // balldontlie NBA
+  const LS_NBA = "nbahub_nba_key";
   const LS_YT = "nbahub_yt_key";
   const LS_MODE = "nbahub_mode";
   const LS_CACHE = "nbahub_video_cache";
@@ -798,35 +798,42 @@
     try { localStorage.setItem(LS_CACHE, JSON.stringify(videoCache)); } catch (e) {}
   }
 
-  const tsdbInput = document.getElementById("tsdbKey");
+  const nbaInput = document.getElementById("nbaKey");
   const ytInput = document.getElementById("apiKey");
 
   // Kulcsok visszatöltése + mentése (kényelem; gépenként a böngészőben marad)
-  tsdbInput.value = localStorage.getItem(LS_TSDB) || "";
+  nbaInput.value = localStorage.getItem(LS_NBA) || "";
   ytInput.value = localStorage.getItem(LS_YT) || "";
-  tsdbInput.addEventListener("change", () => { try { localStorage.setItem(LS_TSDB, tsdbInput.value.trim()); } catch (e) {} });
+  nbaInput.addEventListener("change", () => { try { localStorage.setItem(LS_NBA, nbaInput.value.trim()); } catch (e) {} });
   ytInput.addEventListener("change", () => { try { localStorage.setItem(LS_YT, ytInput.value.trim()); } catch (e) {} });
 
   document.getElementById("loadNba").addEventListener("click", () => { closeSettings(); loadFromNbaApi(false); });
 
-  // Az utolsó N lejátszott NBA meccs a TheSportsDB-ről.
-  async function fetchLastNbaGames(tsdbKey, n) {
-    const key = tsdbKey || "3";
-    const url = `https://www.thesportsdb.com/api/v1/json/${key}/eventspastleague.php?id=${NBA_LEAGUE_ID}`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error("NBA API státusz " + r.status);
-    const j = await r.json();
-    const events = (j.events || []).filter(e =>
-      e.intHomeScore !== null && e.intHomeScore !== "" && e.intHomeScore !== undefined);
-    events.sort((a, b) =>
-      (b.dateEvent + (b.strTime || "")).localeCompare(a.dateEvent + (a.strTime || "")));
-    return events.slice(0, n).map(e => ({
-      gid: e.idEvent,
-      date: e.dateEvent,
-      home: e.strHomeTeam,
-      away: e.strAwayTeam,
-      hs: e.intHomeScore,
-      as: e.intAwayScore
+  // Az utolsó N lejátszott NBA meccs a balldontlie API-ból.
+  async function fetchLastNbaGames(nbaKey, n) {
+    const fmt = d => d.toISOString().slice(0, 10);
+    const today = new Date();
+    async function queryWindow(daysBack) {
+      const start = new Date(today.getTime() - daysBack * 86400000);
+      const url = `${BDL_BASE}/games?start_date=${fmt(start)}&end_date=${fmt(today)}&per_page=100`;
+      const r = await fetch(url, { headers: { "Authorization": nbaKey } });
+      if (r.status === 401) throw new Error("balldontlie: érvénytelen kulcs (401)");
+      if (!r.ok) throw new Error("NBA API státusz " + r.status);
+      const j = await r.json();
+      return (j.data || []).filter(g => g.status === "Final");
+    }
+    // Szűk ablak (kevés API-hívás); ha nincs elég lejátszott meccs, tágítunk.
+    let finished = await queryWindow(14);
+    if (finished.length < n) finished = await queryWindow(90);
+    finished.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    return finished.slice(0, n).map(g => ({
+      gid: String(g.id),
+      date: (g.date || "").slice(0, 10),
+      home: g.home_team.full_name,
+      away: g.visitor_team.full_name,
+      hs: g.home_team_score,
+      as: g.visitor_team_score,
+      post: !!g.postseason
     }));
   }
 
@@ -853,16 +860,16 @@
 
   async function loadFromNbaApi(silent = false) {
     const ytKey = ytInput.value.trim();
-    const tsdbKey = tsdbInput.value.trim();
+    const nbaKey = nbaInput.value.trim();
     const list = document.getElementById("list");
-    if (!ytKey) {
-      if (!silent) alert("A videók megkereséséhez YouTube Data API kulcs is kell (a mező üres).");
+    if (!ytKey || !nbaKey) {
+      if (!silent) alert("Az NBA API módhoz mindkét kulcs kell:\n• NBA API kulcs (balldontlie)\n• YouTube Data API kulcs");
       return;
     }
     if (!silent) list.innerHTML = '<div class="status">⏳ Utolsó 5 meccs lekérése az NBA API-ból és a videók keresése a YouTube-on…</div>';
     try {
-      const games = await fetchLastNbaGames(tsdbKey, MAX_ITEMS);
-      if (!games.length) throw new Error("Az NBA API nem adott vissza lejátszott meccset (ingyenes kulcs lehet szükséges).");
+      const games = await fetchLastNbaGames(nbaKey, MAX_ITEMS);
+      if (!games.length) throw new Error("Az NBA API nem adott vissza lejátszott meccset.");
       const built = [];
       for (const g of games) {
         let vid = videoCache[g.gid];
@@ -878,7 +885,7 @@
             teams: `${g.away} ${g.as}–${g.hs} ${g.home}`,
             date: g.date,
             views: vid.views || 0,
-            tag: "NBA API"
+            tag: g.post ? "Rájátszás" : "Alapszakasz"
           });
         }
       }
@@ -1010,7 +1017,7 @@
 
   // Indításkor: ha korábban NBA API módban voltunk és van YouTube kulcs,
   // automatikusan betöltjük az utolsó 5 meccset (a gyorsítótár miatt olcsó).
-  if (localStorage.getItem(LS_MODE) === "nba" && ytInput.value.trim()) {
+  if (localStorage.getItem(LS_MODE) === "nba" && ytInput.value.trim() && nbaInput.value.trim()) {
     loadFromNbaApi(false);
   }
 </script>
