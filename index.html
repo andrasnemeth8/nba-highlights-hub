@@ -408,6 +408,9 @@
   let videos = [...CURATED];
   let currentSort = "date-desc";
 
+  // A listában mindig csak a legutóbbi ennyi meccs jelenik meg (dátum szerint).
+  const MAX_ITEMS = 5;
+
   const MONTHS = ["JAN","FEB","MÁR","ÁPR","MÁJ","JÚN","JÚL","AUG","SZE","OKT","NOV","DEC"];
 
   function fmtViews(n) {
@@ -427,7 +430,12 @@
 
   function render() {
     const list = document.getElementById("list");
-    const sorted = sortVideos(videos);
+    // Mindig csak a legutóbbi MAX_ITEMS meccs (dátum szerint), majd erre
+    // alkalmazzuk a felhasználó által választott megjelenítési rendezést.
+    const recent = [...videos]
+      .sort((x, y) => y.date.localeCompare(x.date))
+      .slice(0, MAX_ITEMS);
+    const sorted = sortVideos(recent);
     if (!sorted.length) {
       list.innerHTML = '<div class="status">Nincs megjeleníthető videó.</div>';
       return;
