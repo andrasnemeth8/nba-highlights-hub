@@ -348,9 +348,31 @@
   // Megjegyzés: a videók beágyazhatósága verifikálva (a YouTube IFrame API-val).
   // A hivatalos NBA highlight-újratöltések többsége tiltja a beágyazást, ezért
   // beágyazható forrásokat (FreeDawkins, House of Highlights, NBA-klip stb.) használunk.
+  // A "match" mező azonosítja a meccset: egy meccshez több videó is tartozhat
+  // (pl. teljes összefoglaló + hajrá-klip), de a listában meccsenként csak EGY
+  // videó jelenik meg (a legnézettebb). Így mindig 5 KÜLÖNBÖZŐ meccs látszik.
   const CURATED = [
     {
+      id: "p29ZuNJAQ4M",
+      match: "finals-g3",
+      title: "Spurs vs Knicks — NBA Finals Game 3 (teljes összefoglaló)",
+      teams: "San Antonio Spurs vs New York Knicks",
+      date: "2026-06-07",
+      views: 3100000,
+      tag: "NBA Finals"
+    },
+    {
+      id: "sEINzhJIIXQ",
+      match: "finals-g2",
+      title: "Spurs vs Knicks — NBA Finals Game 2 (teljes összefoglaló)",
+      teams: "San Antonio Spurs vs New York Knicks",
+      date: "2026-06-05",
+      views: 3600000,
+      tag: "NBA Finals"
+    },
+    {
       id: "7EJIPo-wfwo",
+      match: "finals-g2",
       title: "Knicks vs Spurs — NBA Finals Game 2 (drámai hajrá, utolsó 5:59)",
       teams: "New York Knicks vs San Antonio Spurs",
       date: "2026-06-05",
@@ -359,6 +381,7 @@
     },
     {
       id: "t_aqsSrye2U",
+      match: "finals-g1",
       title: "Spurs vs Knicks — NBA Finals Game 1 (teljes összefoglaló)",
       teams: "San Antonio Spurs vs New York Knicks",
       date: "2026-06-03",
@@ -367,6 +390,7 @@
     },
     {
       id: "NAR216YbUxk",
+      match: "finals-g1",
       title: "Spurs vs Knicks — NBA Finals Game 1 (alternatív vágás)",
       teams: "San Antonio Spurs vs New York Knicks",
       date: "2026-06-03",
@@ -375,6 +399,7 @@
     },
     {
       id: "F9yLJ61fPVM",
+      match: "west-g4",
       title: "Spurs vs Thunder — Nyugati döntő Game 4 (teljes összefoglaló)",
       teams: "San Antonio Spurs vs Oklahoma City Thunder",
       date: "2026-05-24",
@@ -383,6 +408,7 @@
     },
     {
       id: "ioTTGXWCqgQ",
+      match: "playoffs-cavs-g1",
       title: "Cavs vs Knicks — Rájátszás Game 1 (hosszabbításos thriller)",
       teams: "Cleveland Cavaliers vs New York Knicks",
       date: "2026-05-19",
@@ -430,9 +456,17 @@
 
   function render() {
     const list = document.getElementById("list");
-    // Mindig csak a legutóbbi MAX_ITEMS meccs (dátum szerint), majd erre
-    // alkalmazzuk a felhasználó által választott megjelenítési rendezést.
-    const recent = [...videos]
+    // 1) Meccsenként EGY videó (a legnézettebb) — ha egy meccshez több videó
+    //    is van, ne duplázódjon. A "match" hiányában a videó önálló meccs.
+    const byMatch = new Map();
+    for (const v of videos) {
+      const key = v.match || v.id;
+      const cur = byMatch.get(key);
+      if (!cur || (v.views || 0) > (cur.views || 0)) byMatch.set(key, v);
+    }
+    // 2) A legutóbbi MAX_ITEMS meccs (dátum szerint), majd erre alkalmazzuk
+    //    a felhasználó által választott megjelenítési rendezést.
+    const recent = [...byMatch.values()]
       .sort((x, y) => y.date.localeCompare(x.date))
       .slice(0, MAX_ITEMS);
     const sorted = sortVideos(recent);
