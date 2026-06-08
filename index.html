@@ -124,6 +124,32 @@
     border-color: transparent;
   }
   .spacer { flex: 1 1 auto; }
+
+  /* ---------- API sor ---------- */
+  .api-bar {
+    max-width: 1040px; margin: 12px auto 0; padding: 0 20px;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .api-bar .api-label { font-size: 12.5px; color: var(--muted); font-weight: 700; }
+  .api-input {
+    background: var(--card); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 8px 13px; border-radius: 999px; outline: none;
+    min-width: 168px; flex: 0 1 200px;
+  }
+  .api-input::placeholder { color: var(--muted); }
+  .api-input:focus { border-color: var(--nba-blue); }
+  .api-btn {
+    background: var(--card); border: 1px solid var(--line); color: var(--text);
+    font-weight: 700; font-size: 12.5px; padding: 8px 14px; border-radius: 999px;
+    cursor: pointer; white-space: nowrap; transition: .15s;
+  }
+  .api-btn:hover { border-color: var(--nba-blue); color: #fff; }
+  .api-btn.primary {
+    background: linear-gradient(135deg, var(--nba-blue), var(--nba-red));
+    border-color: transparent; color: #fff; font-weight: 800;
+  }
+  .api-btn.primary:hover { filter: brightness(1.08); }
+
   .refresh-bar {
     max-width: 1040px;
     margin: 12px auto 0;
@@ -317,11 +343,14 @@
     <button class="pill" data-sort="date-asc">⏳ Legrégebbi elöl</button>
     <button class="pill" data-sort="views-desc">🔥 Legnézettebb elöl</button>
     <button class="pill active" id="autoToggle" title="Az oldal percenként automatikusan frissíti a videólistát">🔄 Auto-frissítés: BE</button>
-    <div class="spacer"></div>
-    <div class="api-box" title="Add meg a YouTube Data API v3 kulcsod az élő, legnézettebb összefoglalók betöltéséhez">
-      <input id="apiKey" type="password" placeholder="YouTube API kulcs (opcionális)" />
-      <button id="loadLive">Élő betöltés</button>
-    </div>
+  </div>
+
+  <div class="api-bar">
+    <span class="api-label">⚙️ API mód:</span>
+    <input id="tsdbKey" class="api-input" type="password" placeholder="NBA (TheSportsDB) kulcs" title="Ingyenes kulcs a thesportsdb.com-ról. Üresen a korlátozott teszt kulcsot (3) használja." autocomplete="off" />
+    <input id="apiKey" class="api-input" type="password" placeholder="YouTube Data API kulcs" title="Ingyenes YouTube Data API v3 kulcs — ezzel keresi meg a videókat." autocomplete="off" />
+    <button id="loadNba" class="api-btn primary" title="Az utolsó 5 NBA meccs az NBA API-ból, a videók a YouTube API-val">🏀 Utolsó 5 meccs (NBA API)</button>
+    <button id="loadLive" class="api-btn" title="A YouTube legnézettebb NBA összefoglalói">🔥 Legnézettebb</button>
   </div>
 
   <div class="refresh-bar">
@@ -334,9 +363,11 @@
   <main id="list"></main>
 
   <footer>
-    A beágyazott videók a YouTube hivatalos NBA highlight csatornáiról származnak.
-    Élő frissítéshez add meg a saját
-    <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener">YouTube Data API</a> kulcsod.
+    Az „Utolsó 5 meccs (NBA API)" mód az utolsó NBA meccseket a
+    <a href="https://www.thesportsdb.com/free_sports_api" target="_blank" rel="noopener">TheSportsDB</a>
+    ingyenes API-jából tölti, a videókat pedig a
+    <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener">YouTube Data API</a>-val keresi meg.
+    A kulcsok csak a böngésződben tárolódnak. Kulcsok nélkül a kurált lista látható.
   </footer>
 
 <script>
@@ -636,6 +667,7 @@
         views: Number(it.statistics.viewCount || 0),
         tag: "YouTube"
       }));
+      mode = "live";
       currentSort = "date-desc";
       document.querySelectorAll(".pill[data-sort]").forEach(b =>
         b.classList.toggle("active", b.dataset.sort === "date-desc"));
@@ -644,7 +676,133 @@
       if (silent) return; // auto-frissítéskor csendben hagyjuk a meglévő tartalmat
       list.innerHTML = `<div class="status">⚠️ Nem sikerült betölteni: ${err.message}.<br>
         A kurált lista jelenik meg helyette.</div>`;
-      setTimeout(() => { videos = [...CURATED]; render(); }, 2500);
+      setTimeout(() => { mode = "curated"; videos = [...CURATED]; render(); }, 2500);
+    }
+  }
+
+  /* ----------------------------------------------------------
+     TELJES API-MÓD
+     1) Az utolsó 5 lejátszott NBA meccs egy ingyenes NBA API-ból
+        (TheSportsDB, NBA league id 4387) — dátum + csapatok.
+     2) Meccsenként a YouTube Data API megkeresi a beágyazható
+        összefoglaló videót (videoEmbeddable=true, a legnézettebbet).
+     A talált videók localStorage-ban gyorsítótárazva → az auto-
+     frissítés és az újratöltés csak az ÚJ meccsekre keres (kvóta-kímélő).
+  ---------------------------------------------------------- */
+  const NBA_LEAGUE_ID = "4387";          // TheSportsDB: NBA
+  const LS_TSDB = "nbahub_tsdb_key";
+  const LS_YT = "nbahub_yt_key";
+  const LS_MODE = "nbahub_mode";
+  const LS_CACHE = "nbahub_video_cache";
+
+  let mode = "curated";                   // "curated" | "live" | "nba"
+  let videoCache = loadVideoCache();      // idEvent -> { id, views, title }
+
+  function loadVideoCache() {
+    try { return JSON.parse(localStorage.getItem(LS_CACHE) || "{}"); } catch (e) { return {}; }
+  }
+  function saveVideoCache() {
+    try { localStorage.setItem(LS_CACHE, JSON.stringify(videoCache)); } catch (e) {}
+  }
+
+  const tsdbInput = document.getElementById("tsdbKey");
+  const ytInput = document.getElementById("apiKey");
+
+  // Kulcsok visszatöltése + mentése (kényelem; gépenként a böngészőben marad)
+  tsdbInput.value = localStorage.getItem(LS_TSDB) || "";
+  ytInput.value = localStorage.getItem(LS_YT) || "";
+  tsdbInput.addEventListener("change", () => { try { localStorage.setItem(LS_TSDB, tsdbInput.value.trim()); } catch (e) {} });
+  ytInput.addEventListener("change", () => { try { localStorage.setItem(LS_YT, ytInput.value.trim()); } catch (e) {} });
+
+  document.getElementById("loadNba").addEventListener("click", () => loadFromNbaApi(false));
+
+  // Az utolsó N lejátszott NBA meccs a TheSportsDB-ről.
+  async function fetchLastNbaGames(tsdbKey, n) {
+    const key = tsdbKey || "3";
+    const url = `https://www.thesportsdb.com/api/v1/json/${key}/eventspastleague.php?id=${NBA_LEAGUE_ID}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("NBA API státusz " + r.status);
+    const j = await r.json();
+    const events = (j.events || []).filter(e =>
+      e.intHomeScore !== null && e.intHomeScore !== "" && e.intHomeScore !== undefined);
+    events.sort((a, b) =>
+      (b.dateEvent + (b.strTime || "")).localeCompare(a.dateEvent + (a.strTime || "")));
+    return events.slice(0, n).map(e => ({
+      gid: e.idEvent,
+      date: e.dateEvent,
+      home: e.strHomeTeam,
+      away: e.strAwayTeam,
+      hs: e.intHomeScore,
+      as: e.intAwayScore
+    }));
+  }
+
+  // Egy meccshez beágyazható highlight videó keresése a YouTube API-val.
+  async function findHighlightForGame(ytKey, g) {
+    const q = encodeURIComponent(`${g.away} vs ${g.home} ${g.date} full game highlights`);
+    const sUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video` +
+      `&maxResults=5&order=relevance&videoEmbeddable=true&q=${q}&key=${ytKey}`;
+    const sRes = await fetch(sUrl);
+    if (!sRes.ok) throw new Error("YouTube keresés " + sRes.status);
+    const sData = await sRes.json();
+    const ids = (sData.items || []).map(i => i.id.videoId).filter(Boolean);
+    if (!ids.length) return null;
+    const vUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${ids.join(",")}&key=${ytKey}`;
+    const vRes = await fetch(vUrl);
+    if (!vRes.ok) throw new Error("YouTube statisztika " + vRes.status);
+    const vData = await vRes.json();
+    const items = (vData.items || []).sort((a, b) =>
+      Number(b.statistics.viewCount || 0) - Number(a.statistics.viewCount || 0));
+    const best = items[0];
+    if (!best) return null;
+    return { id: best.id, views: Number(best.statistics.viewCount || 0), title: best.snippet.title };
+  }
+
+  async function loadFromNbaApi(silent = false) {
+    const ytKey = ytInput.value.trim();
+    const tsdbKey = tsdbInput.value.trim();
+    const list = document.getElementById("list");
+    if (!ytKey) {
+      if (!silent) alert("A videók megkereséséhez YouTube Data API kulcs is kell (a mező üres).");
+      return;
+    }
+    if (!silent) list.innerHTML = '<div class="status">⏳ Utolsó 5 meccs lekérése az NBA API-ból és a videók keresése a YouTube-on…</div>';
+    try {
+      const games = await fetchLastNbaGames(tsdbKey, MAX_ITEMS);
+      if (!games.length) throw new Error("Az NBA API nem adott vissza lejátszott meccset (ingyenes kulcs lehet szükséges).");
+      const built = [];
+      for (const g of games) {
+        let vid = videoCache[g.gid];
+        if (!vid) {
+          vid = await findHighlightForGame(ytKey, g);
+          if (vid) videoCache[g.gid] = vid;
+        }
+        if (vid && vid.id) {
+          built.push({
+            id: vid.id,
+            match: g.gid,
+            title: `${g.away} vs ${g.home}`,
+            teams: `${g.away} ${g.as}–${g.hs} ${g.home}`,
+            date: g.date,
+            views: vid.views || 0,
+            tag: "NBA API"
+          });
+        }
+      }
+      saveVideoCache();
+      if (!built.length) throw new Error("Egyik meccshez sem találtam beágyazható videót.");
+      videos = built;
+      mode = "nba";
+      try { localStorage.setItem(LS_MODE, "nba"); } catch (e) {}
+      currentSort = "date-desc";
+      document.querySelectorAll(".pill[data-sort]").forEach(b =>
+        b.classList.toggle("active", b.dataset.sort === "date-desc"));
+      render();
+      lastUpdated = new Date();
+    } catch (err) {
+      if (silent) return;
+      list.innerHTML = `<div class="status">⚠️ NBA API mód: ${err.message}<br>A kurált lista jelenik meg helyette.</div>`;
+      setTimeout(() => { mode = "curated"; videos = [...CURATED]; render(); }, 3500);
     }
   }
 
@@ -674,8 +832,9 @@
   async function doAutoRefresh() {
     // Ne szakítsuk meg a lejátszást: ha bármelyik videó fut, halasztjuk.
     if (document.querySelector(".video-wrap iframe")) return;
-    const key = document.getElementById("apiKey").value.trim();
-    if (key) {
+    if (mode === "nba") {
+      await loadFromNbaApi(true);   // csak az új meccsekre keres (gyorsítótár)
+    } else if (mode === "live") {
       await loadLive(true);
     } else {
       videos = [...CURATED];
@@ -755,6 +914,12 @@
   render();
   updateRefreshUI();
   renderNextMatch();
+
+  // Indításkor: ha korábban NBA API módban voltunk és van YouTube kulcs,
+  // automatikusan betöltjük az utolsó 5 meccset (a gyorsítótár miatt olcsó).
+  if (localStorage.getItem(LS_MODE) === "nba" && ytInput.value.trim()) {
+    loadFromNbaApi(false);
+  }
 </script>
 </body>
 </html>
