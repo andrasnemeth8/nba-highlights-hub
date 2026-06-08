@@ -1,0 +1,8 @@
+# Claude Code helyi konfiguráció (nem része a publikus oldalnak)
+.claude/
+
+# OS / szerkesztő
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp

@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NBA Meccs Összefoglalók — Hub</title>
+<style>
+  :root {
+    --nba-blue: #1d428a;
+    --nba-red: #c8102e;
+    --bg-0: #0a0e1a;
+    --bg-1: #11172b;
+    --bg-2: #182142;
+    --card: #141b33;
+    --line: #243056;
+    --text: #f2f5ff;
+    --muted: #9aa6c8;
+    --gold: #f4c542;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(1200px 600px at 50% -200px, rgba(29,66,138,0.45), transparent 70%),
+      radial-gradient(900px 500px at 100% 0, rgba(200,16,46,0.25), transparent 70%),
+      var(--bg-0);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    position: relative;
+    overflow: hidden;
+    border-bottom: 3px solid var(--nba-red);
+    background:
+      linear-gradient(135deg, rgba(29,66,138,0.55), rgba(200,16,46,0.45)),
+      var(--bg-1);
+  }
+  header::after {
+    /* basketball court line motif */
+    content: "";
+    position: absolute;
+    right: -120px;
+    top: 50%;
+    width: 320px;
+    height: 320px;
+    border: 2px solid rgba(255,255,255,0.08);
+    border-radius: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .header-inner {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 34px 20px 30px;
+    position: relative;
+    z-index: 1;
+  }
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .logo .mark {
+    width: 46px; height: 46px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, var(--nba-blue) 0 50%, var(--nba-red) 50% 100%);
+    display: grid; place-items: center;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .logo .mark span {
+    width: 7px; height: 24px; background: #fff; border-radius: 4px;
+  }
+  .logo .brand {
+    font-weight: 800; letter-spacing: 2px; font-size: 20px;
+  }
+  .logo .brand small { color: var(--gold); display:block; font-size:11px; letter-spacing:3px; font-weight:700; }
+
+  header h1 {
+    font-size: clamp(28px, 5vw, 46px);
+    font-weight: 900;
+    line-height: 1.05;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+  }
+  header h1 .accent { color: var(--gold); }
+  header p.sub {
+    margin-top: 12px;
+    color: #dbe2f7;
+    max-width: 620px;
+    font-size: 15px;
+  }
+
+  /* ---------- Controls ---------- */
+  .controls {
+    max-width: 1040px;
+    margin: 22px auto 0;
+    padding: 0 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+  .pill {
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: .15s;
+  }
+  .pill:hover { color: var(--text); border-color: var(--nba-blue); }
+  .pill.active {
+    color: #fff;
+    background: linear-gradient(135deg, var(--nba-blue), var(--nba-red));
+    border-color: transparent;
+  }
+  .spacer { flex: 1 1 auto; }
+  .refresh-bar {
+    max-width: 1040px;
+    margin: 12px auto 0;
+    padding: 0 20px;
+    font-size: 12.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .refresh-bar #refreshInfo b { color: var(--gold); }
+  .refresh-bar .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #36d399; box-shadow: 0 0 8px #36d399;
+    animation: pulse 2s infinite;
+  }
+  .refresh-bar .dot.off { background: var(--muted); box-shadow: none; animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .api-box {
+    display: flex; gap: 8px; align-items: center;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px 6px 5px 14px;
+  }
+  .api-box input {
+    background: transparent; border: 0; color: var(--text);
+    font-size: 13px; width: 190px; outline: none;
+  }
+  .api-box input::placeholder { color: var(--muted); }
+  .api-box button {
+    background: var(--gold); color: #1a1300; border: 0;
+    font-weight: 800; font-size: 12px; padding: 7px 14px;
+    border-radius: 999px; cursor: pointer;
+  }
+  .api-box button:hover { filter: brightness(1.08); }
+
+  /* ---------- List ---------- */
+  main {
+    max-width: 1040px;
+    margin: 26px auto 60px;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+  }
+  .status {
+    color: var(--muted); font-size: 14px; text-align: center; padding: 10px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    transition: transform .18s, border-color .18s;
+  }
+  .card:hover { transform: translateY(-3px); border-color: var(--nba-blue); }
+
+  .card-head {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .datebadge {
+    flex: 0 0 auto;
+    text-align: center;
+    background: linear-gradient(135deg, var(--nba-blue), var(--nba-red));
+    border-radius: 10px;
+    padding: 8px 12px;
+    min-width: 64px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+  }
+  .datebadge .d { font-size: 22px; font-weight: 900; line-height: 1; }
+  .datebadge .m { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #ffe7c2; }
+  .datebadge .y { font-size: 10px; color: #d9e1ff; }
+
+  .card-title { flex: 1 1 260px; min-width: 0; }
+  .card-title h2 { font-size: 17px; font-weight: 800; }
+  .card-title .meta {
+    margin-top: 4px; font-size: 13px; color: var(--muted);
+    display: flex; gap: 14px; flex-wrap: wrap;
+  }
+  .card-title .meta b { color: var(--gold); }
+  .tag {
+    font-size: 11px; font-weight: 800; letter-spacing: .5px;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(200,16,46,0.18); color: #ff9aa9;
+    border: 1px solid rgba(200,16,46,0.4);
+    text-transform: uppercase;
+  }
+
+  .video-wrap {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    cursor: pointer;
+  }
+  .video-wrap img.thumb {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    opacity: .92; transition: opacity .2s;
+  }
+  .video-wrap:hover img.thumb { opacity: 1; }
+  .play {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    pointer-events: none;
+  }
+  .play .btn {
+    width: 78px; height: 54px; border-radius: 14px;
+    background: rgba(200,16,46,0.92);
+    display: grid; place-items: center;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    transition: transform .15s;
+  }
+  .video-wrap:hover .play .btn { transform: scale(1.07); }
+  .play .btn::after {
+    content: ""; width: 0; height: 0;
+    border-left: 20px solid #fff;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+    margin-left: 4px;
+  }
+  .video-wrap iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+  footer {
+    text-align: center; color: var(--muted); font-size: 13px;
+    padding: 30px 20px 50px;
+    border-top: 1px solid var(--line);
+  }
+  footer a { color: var(--gold); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="mark"><span></span></div>
+        <div class="brand">NBA<br><small>HIGHLIGHTS HUB</small></div>
+      </div>
+      <h1>Meccs <span class="accent">Összefoglalók</span></h1>
+      <p class="sub">
+        A YouTube legnézettebb NBA meccs-összefoglaló videói egy helyen,
+        dátum szerint rendezve — a legfrissebb meccsek felül. Kattints a videóra a lejátszáshoz.
+      </p>
+    </div>
+  </header>
+
+  <div class="controls">
+    <button class="pill active" data-sort="date-desc">📅 Legújabb elöl</button>
+    <button class="pill" data-sort="date-asc">⏳ Legrégebbi elöl</button>
+    <button class="pill" data-sort="views-desc">🔥 Legnézettebb elöl</button>
+    <button class="pill active" id="autoToggle" title="Az oldal percenként automatikusan frissíti a videólistát">🔄 Auto-frissítés: BE</button>
+    <div class="spacer"></div>
+    <div class="api-box" title="Add meg a YouTube Data API v3 kulcsod az élő, legnézettebb összefoglalók betöltéséhez">
+      <input id="apiKey" type="password" placeholder="YouTube API kulcs (opcionális)" />
+      <button id="loadLive">Élő betöltés</button>
+    </div>
+  </div>
+
+  <div class="refresh-bar">
+    <span class="dot" id="refreshDot"></span>
+    <span id="refreshInfo">Automatikus frissítés percenként aktív.</span>
+  </div>
+
+  <main id="list"></main>
+
+  <footer>
+    A beágyazott videók a YouTube hivatalos NBA highlight csatornáiról származnak.
+    Élő frissítéshez add meg a saját
+    <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener">YouTube Data API</a> kulcsod.
+  </footer>
+
+<script>
+  /* ----------------------------------------------------------
+     Kurált, valós NBA meccs-összefoglalók (YouTube videó ID-k).
+     A "views" megtekintésszám hozzávetőleges; élő pontos adatért
+     használd az API-betöltést (jobb felső sarok).
+  ---------------------------------------------------------- */
+  // Megjegyzés: a videók beágyazhatósága verifikálva (a YouTube IFrame API-val).
+  // A hivatalos NBA highlight-újratöltések többsége tiltja a beágyazást, ezért
+  // beágyazható forrásokat (FreeDawkins, House of Highlights, NBA-klip stb.) használunk.
+  const CURATED = [
+    {
+      id: "7EJIPo-wfwo",
+      title: "Knicks vs Spurs — NBA Finals Game 2 (drámai hajrá, utolsó 5:59)",
+      teams: "New York Knicks vs San Antonio Spurs",
+      date: "2026-06-05",
+      views: 2900000,
+      tag: "NBA Finals"
+    },
+    {
+      id: "t_aqsSrye2U",
+      title: "Spurs vs Knicks — NBA Finals Game 1 (teljes összefoglaló)",
+      teams: "San Antonio Spurs vs New York Knicks",
+      date: "2026-06-03",
+      views: 4200000,
+      tag: "NBA Finals"
+    },
+    {
+      id: "NAR216YbUxk",
+      title: "Spurs vs Knicks — NBA Finals Game 1 (alternatív vágás)",
+      teams: "San Antonio Spurs vs New York Knicks",
+      date: "2026-06-03",
+      views: 1800000,
+      tag: "NBA Finals"
+    },
+    {
+      id: "F9yLJ61fPVM",
+      title: "Spurs vs Thunder — Nyugati döntő Game 4 (teljes összefoglaló)",
+      teams: "San Antonio Spurs vs Oklahoma City Thunder",
+      date: "2026-05-24",
+      views: 2600000,
+      tag: "West Finals"
+    },
+    {
+      id: "ioTTGXWCqgQ",
+      title: "Cavs vs Knicks — Rájátszás Game 1 (hosszabbításos thriller)",
+      teams: "Cleveland Cavaliers vs New York Knicks",
+      date: "2026-05-19",
+      views: 3300000,
+      tag: "Playoffs"
+    }
+  ];
+
+  let videos = [...CURATED];
+  let currentSort = "date-desc";
+
+  const MONTHS = ["JAN","FEB","MÁR","ÁPR","MÁJ","JÚN","JÚL","AUG","SZE","OKT","NOV","DEC"];
+
+  function fmtViews(n) {
+    if (n == null) return "—";
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(".0","") + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + "E";
+    return String(n);
+  }
+
+  function sortVideos(arr) {
+    const a = [...arr];
+    if (currentSort === "date-desc") a.sort((x, y) => y.date.localeCompare(x.date));
+    else if (currentSort === "date-asc") a.sort((x, y) => x.date.localeCompare(y.date));
+    else if (currentSort === "views-desc") a.sort((x, y) => (y.views||0) - (x.views||0));
+    return a;
+  }
+
+  function render() {
+    const list = document.getElementById("list");
+    const sorted = sortVideos(videos);
+    if (!sorted.length) {
+      list.innerHTML = '<div class="status">Nincs megjeleníthető videó.</div>';
+      return;
+    }
+    list.innerHTML = sorted.map(v => {
+      const d = new Date(v.date + "T00:00:00");
+      const day = d.getDate();
+      const mon = MONTHS[d.getMonth()];
+      const yr = d.getFullYear();
+      const thumb = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
+      return `
+        <article class="card">
+          <div class="card-head">
+            <div class="datebadge">
+              <div class="d">${day}</div>
+              <div class="m">${mon}</div>
+              <div class="y">${yr}</div>
+            </div>
+            <div class="card-title">
+              <h2>${v.title}</h2>
+              <div class="meta">
+                <span>🏀 ${v.teams || ""}</span>
+                <span>👁 <b>${fmtViews(v.views)}</b> megtekintés</span>
+              </div>
+            </div>
+            ${v.tag ? `<span class="tag">${v.tag}</span>` : ""}
+          </div>
+          <div class="video-wrap" data-id="${v.id}" role="button" tabindex="0" aria-label="Lejátszás: ${v.title}">
+            <img class="thumb" loading="lazy" src="${thumb}"
+                 onerror="this.src='https://i.ytimg.com/vi/${v.id}/hqdefault.jpg'" alt="${v.title}" />
+            <div class="play"><div class="btn"></div></div>
+          </div>
+        </article>`;
+    }).join("");
+  }
+
+  // Lejátszás: thumbnail -> beágyazott iframe csere
+  document.getElementById("list").addEventListener("click", e => {
+    const wrap = e.target.closest(".video-wrap");
+    if (!wrap) return;
+    playVideo(wrap);
+  });
+  document.getElementById("list").addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") {
+      const wrap = e.target.closest(".video-wrap");
+      if (wrap) { e.preventDefault(); playVideo(wrap); }
+    }
+  });
+  // YouTube IFrame Player API betöltése (egyszer)
+  let ytApiReady = false;
+  const ytApiQueue = [];
+  (function loadYTApi() {
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  })();
+  window.onYouTubeIframeAPIReady = function () {
+    ytApiReady = true;
+    ytApiQueue.splice(0).forEach(fn => fn());
+  };
+
+  let playerSeq = 0;
+  function playVideo(wrap) {
+    const id = wrap.dataset.id;
+    const mountId = "yt-player-" + (++playerSeq);
+    wrap.innerHTML = `<div id="${mountId}"></div>`;
+
+    const create = () => {
+      new YT.Player(mountId, {
+        videoId: id,
+        host: "https://www.youtube-nocookie.com",
+        playerVars: {
+          autoplay: 1,
+          rel: 0,
+          playsinline: 1,
+          origin: window.location.origin
+        },
+        events: {
+          onError: e => {
+            // 101 / 150 = a feltöltő letiltotta a beágyazást; 2/5/100 = egyéb hiba
+            showFallback(wrap, id);
+          }
+        }
+      });
+    };
+    if (ytApiReady) create();
+    else ytApiQueue.push(create);
+  }
+
+  // Ha a videó nem ágyazható be: kattintható "Megnézés YouTube-on" felület
+  function showFallback(wrap, id) {
+    const thumb = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+    const url = `https://www.youtube.com/watch?v=${id}`;
+    wrap.innerHTML = `
+      <a class="fallback" href="${url}" target="_blank" rel="noopener"
+         style="position:absolute;inset:0;display:block;text-decoration:none;">
+        <img src="${thumb}" alt=""
+             style="width:100%;height:100%;object-fit:cover;filter:brightness(.45);" />
+        <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+                    color:#fff;padding:20px;">
+          <div>
+            <div style="width:78px;height:54px;border-radius:14px;background:rgba(200,16,46,.95);
+                        display:grid;place-items:center;margin:0 auto 14px;
+                        box-shadow:0 6px 24px rgba(0,0,0,.5);">
+              <div style="width:0;height:0;border-left:20px solid #fff;border-top:12px solid transparent;
+                          border-bottom:12px solid transparent;margin-left:4px;"></div>
+            </div>
+            <div style="font-weight:800;font-size:16px;">Megnézés YouTube-on ↗</div>
+            <div style="font-size:13px;color:#cdd6f0;margin-top:6px;">
+              Ezt a videót a feltöltő nem engedi beágyazni más oldalra.
+            </div>
+          </div>
+        </div>
+      </a>`;
+  }
+
+  // Rendezés gombok
+  document.querySelectorAll(".pill[data-sort]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".pill[data-sort]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentSort = btn.dataset.sort;
+      render();
+    });
+  });
+
+  /* ----------------------------------------------------------
+     Opcionális élő betöltés a YouTube Data API v3-ról.
+     A legnézettebb "NBA full game highlights" videókat kéri le,
+     majd dátum szerint rendezi.
+  ---------------------------------------------------------- */
+  document.getElementById("loadLive").addEventListener("click", () => loadLive(false));
+  async function loadLive(silent = false) {
+    const key = document.getElementById("apiKey").value.trim();
+    const list = document.getElementById("list");
+    if (!key) {
+      if (!silent) alert("Add meg a YouTube Data API v3 kulcsod az élő betöltéshez.");
+      return;
+    }
+    if (!silent) list.innerHTML = '<div class="status">⏳ Legnézettebb NBA összefoglalók betöltése a YouTube-ról…</div>';
+    try {
+      const q = encodeURIComponent("NBA full game highlights");
+      const searchUrl =
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video` +
+        `&q=${q}&order=viewCount&maxResults=15&videoEmbeddable=true&relevanceLanguage=en&key=${key}`;
+      const sRes = await fetch(searchUrl);
+      if (!sRes.ok) throw new Error("Keresési hiba: " + sRes.status);
+      const sData = await sRes.json();
+      const ids = sData.items.map(i => i.id.videoId).filter(Boolean);
+      if (!ids.length) throw new Error("Nincs találat.");
+
+      // Pontos megtekintésszám lekérése
+      const statUrl =
+        `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet` +
+        `&id=${ids.join(",")}&key=${key}`;
+      const vRes = await fetch(statUrl);
+      const vData = await vRes.json();
+
+      videos = vData.items.map(it => ({
+        id: it.id,
+        title: it.snippet.title,
+        teams: it.snippet.channelTitle,
+        date: it.snippet.publishedAt.slice(0, 10),
+        views: Number(it.statistics.viewCount || 0),
+        tag: "YouTube"
+      }));
+      currentSort = "date-desc";
+      document.querySelectorAll(".pill[data-sort]").forEach(b =>
+        b.classList.toggle("active", b.dataset.sort === "date-desc"));
+      render();
+    } catch (err) {
+      if (silent) return; // auto-frissítéskor csendben hagyjuk a meglévő tartalmat
+      list.innerHTML = `<div class="status">⚠️ Nem sikerült betölteni: ${err.message}.<br>
+        A kurált lista jelenik meg helyette.</div>`;
+      setTimeout(() => { videos = [...CURATED]; render(); }, 2500);
+    }
+  }
+
+  /* ----------------------------------------------------------
+     Automatikus frissítés percenként.
+     Ha épp megy egy videó, az adott ciklust kihagyja, hogy ne
+     szakítsa meg a lejátszást. API-kulccsal élőben újratölt,
+     egyébként a kurált listát rendereli újra.
+  ---------------------------------------------------------- */
+  const REFRESH_SECONDS = 60;
+  let autoRefresh = true;
+  let countdown = REFRESH_SECONDS;
+  let lastUpdated = new Date();
+
+  function updateRefreshUI() {
+    const info = document.getElementById("refreshInfo");
+    const dot = document.getElementById("refreshDot");
+    const t = lastUpdated.toLocaleTimeString("hu-HU");
+    dot.classList.toggle("off", !autoRefresh);
+    if (autoRefresh) {
+      info.innerHTML = `Automatikus frissítés • utolsó: <b>${t}</b> • következő: <b>${countdown}s</b>`;
+    } else {
+      info.innerHTML = `Automatikus frissítés szüneteltetve • utolsó: <b>${t}</b>`;
+    }
+  }
+
+  async function doAutoRefresh() {
+    // Ne szakítsuk meg a lejátszást: ha bármelyik videó fut, halasztjuk.
+    if (document.querySelector(".video-wrap iframe")) return;
+    const key = document.getElementById("apiKey").value.trim();
+    if (key) {
+      await loadLive(true);
+    } else {
+      videos = [...CURATED];
+      render();
+    }
+    lastUpdated = new Date();
+  }
+
+  setInterval(() => {
+    if (!autoRefresh) return;
+    countdown--;
+    if (countdown <= 0) {
+      countdown = REFRESH_SECONDS;
+      doAutoRefresh();
+    }
+    updateRefreshUI();
+  }, 1000);
+
+  document.getElementById("autoToggle").addEventListener("click", function () {
+    autoRefresh = !autoRefresh;
+    countdown = REFRESH_SECONDS;
+    this.classList.toggle("active", autoRefresh);
+    this.textContent = autoRefresh ? "🔄 Auto-frissítés: BE" : "⏸ Auto-frissítés: KI";
+    updateRefreshUI();
+  });
+
+  render();
+  updateRefreshUI();
+</script>
+</body>
+</html>
