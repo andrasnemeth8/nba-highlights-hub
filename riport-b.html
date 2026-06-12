@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Befektetési alapok — verseny nézet (B)</title>
+<title>Befektetési alapok — verseny nézet</title>
 <style>
   :root{
     --navy:#1b2a63; --navy-2:#2a3c7e; --ink:#1c2230; --muted:#69708a;
@@ -86,9 +86,9 @@
 <body>
 <header class="top">
   <span class="dot"></span>
-  <b>Befektetési alapok — verseny nézet (B)</b>
+  <b>Befektetési alapok — verseny nézet</b>
   <span class="sp"></span>
-  <a href="befektetesi-alapok-riport.html">⇄ Statisztikai mérleg (A)</a>
+  <a href="https://sta.mnb.hu/Reports/powerbi/STA/BefAlapok_HU?rs:embed=true" target="_blank" rel="noopener">↗ Eredeti MNB-riport</a>
 </header>
 <main>
   <section class="hero">
@@ -300,7 +300,7 @@ document.addEventListener('mousemove',e=>{
 },{passive:true});
 
 $('foot').innerHTML=`<b>Forrás:</b> az MNB „Befektetési alapok statisztikája" riportjának Excel-exportjai (${niceM(MONTHS[0])} – ${niceM(MONTHS[L])}). `+
- `Ez a „B" verzió ugyanazt az adatkészletet használja, mint a <a href="befektetesi-alapok-riport.html" style="color:var(--navy);font-weight:600">statisztikai mérleg (A)</a> — más megközelítésben. Offline, böngészőben futó oldal.`;
+ `Az oldal alapja az eredeti <a href="https://sta.mnb.hu/Reports/powerbi/STA/BefAlapok_HU?rs:embed=true" target="_blank" rel="noopener" style="color:var(--navy);font-weight:600">MNB Power BI-riport</a> — annak adatait dolgozza fel verseny-megközelítésben. Offline, böngészőben futó oldal.`;
 })();
 </script>
 </body>
